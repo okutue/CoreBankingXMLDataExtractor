@@ -1,0 +1,35 @@
+{
+    "source": {
+        "server": "YOUR_SOURCE_SERVER",
+        "database": "SourceDB",
+        "username": "SourceUser",
+        "password": "SourcePassword",
+        "schema": "dbo"
+    },
+    "target": {
+        "server": "YOUR_TARGET_SERVER",
+        "database": "TargetDB",
+        "username": "TargetUser",
+        "password": "TargetPassword",
+        "schema": "dbo"
+    },
+    "default": {
+        "batch_size": 1000,
+        "threads": 4,
+        "log_max_size": 10485760
+    },
+    "tables": [
+        {
+            "table": "SourceTable1",
+            "view": "View1",
+            "target_table": "TargetTable1",
+            "nonxml": false
+        },
+        {
+            "table": "SourceTable2",
+            "view": "View2",
+            "target_table": "TargetTable2",
+            "nonxml": true
+        }
+    ]
+}
