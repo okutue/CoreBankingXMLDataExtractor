@@ -6,6 +6,7 @@ from .extraction import get_view_definition, process_rows
 from .processing import parse_view_mapping_xml, parse_view_mapping_nonxml
 from .loader import create_target_table, load_data_to_target_multi
 from .logging import logger
+from .conversion import convert_value
 
 def main():
     parser = argparse.ArgumentParser(
@@ -32,9 +33,16 @@ def main():
         logger.info(f"Processing source table '{tbl['table']}' with view '{tbl['view']}' to target table '{tbl['target_table']}'")
         nonxml = tbl.get("nonxml", False)
         enabled = tbl.get("enabled",True)
+        
         incremental_col = tbl.get("incremental_column", "").strip()
-        last_value = tbl.get("incremental_value", "").strip()
-
+        # last_value = tbl.get("incremental_value", "").strip()
+        # Get the last incremental value from the config.
+        last_value_str = tbl.get("incremental_value", "").strip()
+        # Convert the stored last_value using our helper.
+        last_value_conv = convert_value(last_value_str) if last_value_str else None
+        
+        logger.info(f"Last incremental value for table '{tbl['target_table']}': {last_value_conv}")
+        
         # Check if table is enabled for ETL
         if not enabled:
             logger.info(f"Skipping table '{tbl['table']}' as extraction is disabled in config")
@@ -98,23 +106,28 @@ def main():
 
         # Filter the processed rows based on incremental value
         filtered_rows = []
-        new_max_value = last_value  # Will store the highest incremental value encountered
+        new_max_value_conv = last_value_conv  # Will store the new max value (converted)
+        new_max_value_raw = last_value_str     # Keep the raw value for config saving
 
         for recid, record in processed_rows:
-            current_val = None
+            current_val_raw = None
             if incremental_col and not nonxml:
-                current_val = record.get(incremental_col)
+                current_val_raw = record.get(incremental_col)
             elif incremental_col and nonxml:
-                current_val = recid  # For non-XML, using RECID as the incremental value (adjust if needed)
+                current_val_raw = recid  # For non-XML, using RECID as the incremental value (adjust if needed)
+                
+            # Convert the current value.
+            current_val_conv = convert_value(current_val_raw) if current_val_raw is not None else None
             
             # If incremental filtering is enabled and a current value is found, decide whether to include the row.
-            if incremental_col and current_val:
+            if incremental_col and current_val_conv:
                 # If last_value is provided, only include rows where current_val is greater.
-                if last_value and current_val < last_value:
+                if last_value_conv and current_val_conv < last_value_conv:
                     continue  # Skip this row as it is not new.
                 # Update new_max_value if current_val is greater than the previous maximum.
-                if new_max_value == "" or current_val >= new_max_value:
-                    new_max_value = current_val
+                if new_max_value_conv is None or current_val_conv >= new_max_value_conv:
+                    new_max_value_conv = current_val_conv
+                    new_max_value_raw = current_val_raw  # Save the raw value to write to config.
             # Include the row for insertion.
             filtered_rows.append((recid, record))
 
@@ -154,9 +167,10 @@ def main():
 
         # If incremental filtering is in use, update the configuration with the new maximum value.
         if incremental_col:
-            if new_max_value and new_max_value != last_value:
-                tbl["incremental_value"] = new_max_value
-                logger.info(f"Setting Incremental value for table '{tbl['table']}' to '{tbl['incremental_column']}': {new_max_value}")
+            if incremental_col and new_max_value_raw and (last_value_conv is None or new_max_value_conv > last_value_conv):
+                tbl["incremental_value"] = new_max_value_raw  # Save the raw string value to config.
+                # tbl["incremental_value"] = new_max_value
+                logger.info(f"Setting Incremental value for table '{tbl['table']}' to '{tbl['incremental_column']}': {new_max_value_raw}")
             else:
                 logger.info(f"No new incremental value found for table '{tbl['table']}'.")
         

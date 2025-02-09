@@ -128,7 +128,8 @@ class DataLoaderGUI(tk.Tk):
             self.append_log(line)
         process.stdout.close()
         process.wait()
-        self.append_log("XMLDataExtractor process completed.\n")
+        # logger.info("ETL process complete for all tables.")
+        self.append_log("XMLDataExtractor ETL process complete.\n")
         self.dataloader_button.config(state="normal")
     
     def append_log(self, message):
